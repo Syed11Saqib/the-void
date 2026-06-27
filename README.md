@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # DR.VOID — Healthcare Triage Assistant (MVP)
 
 A calm, mobile-first healthcare assistant for Tier-2/Tier-3 users. **Not a medical diagnosis tool.**
@@ -49,3 +50,41 @@ npm run test:e2e    # e2e (Playwright) — requires the dev server
 - `lib/services/aiService.ts` enforces the no-diagnosis / no-dosage rules both via a strict system prompt **and** a post-hoc sanitizer that strips anything matching a dosage pattern, in case the model slips.
 - `lib/store/profileStore.ts` is local-first (localStorage/sessionStorage) so the app works immediately without Supabase configured; swap its internals for Supabase queries when ready — each method maps 1:1 to a future query.
 - This is an MVP scaffold, not a finished production system: error boundaries, full Supabase profile sync, server-side rate limiting, and broader test coverage are the natural next steps.
+=======
+# 🚀 Hackathon Repository
+
+Welcome to the Hackathon!
+
+## 📋 Instructions
+
+1. Click the **Fork** button at the top-right corner of this repository.
+2. Rename your forked repository to your **Team Name** (or **Team ID**, if instructed).
+3. Clone your forked repository:
+   ```bash
+   git clone https://github.com/<your-github-username>/<team-name>.git
+   ```
+4. Build your project and commit your changes.
+5. Push your code to your forked repository:
+   ```bash
+   git add .
+   git commit -m "Initial project submission"
+   git push origin main
+   ```
+6. Submit your GitHub repository link before the submission deadline.
+
+## 📁 Repository Naming
+
+Use your **Team Name** as the repository name.
+
+**Examples:**
+- Team Alpha → `Team-Alpha`
+- Team 07 → `Team-07`
+
+## ⚠️ Important
+
+- Do **not** push code to the original repository.
+- Work only in your own forked repository.
+- Ensure your final code is pushed before the submission deadline.
+
+Good luck and happy coding! 🚀
+>>>>>>> 5426cd669ffacc4a3cd590d2ce08468147216260
