@@ -1,4 +1,5 @@
 import type { ChatMessage, HealthSummary, Profile, Urgency } from '@/lib/types';
+import { GoogleGenAI } from '@google/genai';
 
 const SYSTEM_PROMPT = `You are DR.VOID, a healthcare TRIAGE ASSISTANT. You are NOT a doctor.
 
@@ -67,100 +68,57 @@ export async function analyzeSymptoms({
   messages,
   followUpCount,
 }: AnalyzeParams): Promise<AIResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY not configured');
+    throw new Error('GEMINI_API_KEY not configured. Get your Gemini API Key at https://aistudio.google.com/');
   }
 
-  const CANDIDATE_MODELS = [
-    'openai/gpt-oss-20b:free',
-    'google/gemma-4-31b-it:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'qwen/qwen3-next-80b-a3b-instruct:free',
-    'meta-llama/llama-3.2-3b-instruct:free',
-  ];
-
-  const configuredModel = process.env.OPENROUTER_MODEL;
-  const modelsToTry = configuredModel
-    ? [configuredModel, ...CANDIDATE_MODELS.filter((m) => m !== configuredModel)]
-    : CANDIDATE_MODELS;
+  const ai = new GoogleGenAI({ apiKey });
 
   const profileContext = `Patient context: age ${profile.age}, gender ${profile.gender}, diabetes: ${profile.conditions.diabetes}, blood pressure: ${profile.conditions.bloodPressure}, asthma: ${profile.conditions.asthma}, smoking: ${profile.conditions.smoking}, allergies: ${profile.allergies.join(', ') || 'none'}. Follow-up questions already asked: ${followUpCount}/2.`;
 
-  const conversation = messages.map((m) => ({
-    role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-    content: m.text,
+  const systemInstruction = `${SYSTEM_PROMPT}\n\n${profileContext}`;
+
+  const contents = messages.map((m) => ({
+    role: m.role === 'user' ? ('user' as const) : ('model' as const),
+    parts: [{ text: m.text }],
   }));
 
-  const errors: string[] = [];
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents,
+    config: {
+      systemInstruction,
+      temperature: 0.3,
+      responseMimeType: 'application/json',
+    },
+  });
 
-  for (const modelToUse of modelsToTry) {
-    try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: modelToUse,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'system', content: profileContext },
-            ...conversation,
-          ],
-          temperature: 0.3,
-          max_tokens: 600,
-        }),
-      });
+  const content = response.text || '';
 
-      if (!response.ok) {
-        let errMsg = `OpenRouter request failed for ${modelToUse}: ${response.status}`;
-        try {
-          const errData = await response.json();
-          if (errData?.error?.metadata?.raw) {
-            errMsg = errData.error.metadata.raw;
-          } else if (errData?.error?.message) {
-            errMsg = errData.error.message;
-          }
-        } catch {}
-        throw new Error(errMsg);
-      }
-
-      const data = await response.json();
-      const content: string = data?.choices?.[0]?.message?.content ?? '';
-
-      let parsed: AIResult;
-      try {
-        const jsonStr = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
-        parsed = JSON.parse(jsonStr);
-      } catch {
-        parsed = {
-          needsFollowUp: false,
-          followUpQuestion: null,
-          urgency: 'medium',
-          possibleCause: content.trim(),
-          homeCare: [],
-          doctorRecommendation: 'Please consult a doctor for further advice.',
-          emergencySigns: [],
-        };
-      }
-
-      if (followUpCount >= 2) {
-        parsed.needsFollowUp = false;
-        parsed.followUpQuestion = null;
-      }
-
-      return sanitizeAIResult(parsed);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn(`Model ${modelToUse} failed: ${msg}`);
-      errors.push(`${modelToUse}: ${msg}`);
-    }
+  let parsed: AIResult;
+  try {
+    const jsonStr = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    parsed = {
+      needsFollowUp: false,
+      followUpQuestion: null,
+      urgency: 'medium',
+      possibleCause: content.trim(),
+      homeCare: [],
+      doctorRecommendation: 'Please consult a doctor for further advice.',
+      emergencySigns: [],
+    };
   }
 
-  throw new Error(`All models failed: ${errors.join(' | ')}`);
+  if (followUpCount >= 2) {
+    parsed.needsFollowUp = false;
+    parsed.followUpQuestion = null;
+  }
+
+  return sanitizeAIResult(parsed);
 }
 
 export function buildHealthSummary(
